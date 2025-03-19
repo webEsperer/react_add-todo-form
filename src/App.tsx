@@ -4,45 +4,17 @@ import usersFromServer from './api/users';
 import todosFromServer from './api/todos';
 import { ChangeEvent, FormEvent, useState } from 'react';
 import { TodoList } from './components/TodoList';
+import { Todo } from './types/Todos';
+import { Error } from './types/Error';
 
-export interface Todo {
-  id: number;
-  title: string;
-  completed: boolean;
-  userId: number;
-  user: User;
-}
+const todos = todosFromServer.map(todo => {
+  const userFind = usersFromServer.find(user => user.id === todo.userId);
 
-export interface User {
-  id: number;
-  name: string;
-  username: string;
-  email: string;
-}
-
-type Error = {
-  input: boolean;
-  select: boolean;
-};
-
-const findUser = (id: number) => {
-  return (
-    usersFromServer.find(user => id === user.id) || {
-      id: 0,
-      name: '',
-      username: '',
-      email: '',
-    }
-  );
-};
+  return { ...todo, user: userFind };
+});
 
 export const App = () => {
-  const [todos, setTodos] = useState<Todo[]>(
-    todosFromServer.map(todo => ({
-      ...todo,
-      user: findUser(todo.userId),
-    })),
-  );
+  const [visibleTodos, setVisibleTodos] = useState<Todo[]>(todos);
 
   const [inputValue, setInputValue] = useState<string>('');
   const [selectedUser, setSelectedUser] = useState<string>('0');
@@ -51,21 +23,10 @@ export const App = () => {
     select: false,
   });
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const addTodo = () => {
+    const newId =
+      visibleTodos.reduce((max, todo) => Math.max(max, todo.id), 0) + 1;
 
-    const newErrors = {
-      input: inputValue.trim() === '',
-      select: selectedUser === '0',
-    };
-
-    setError(newErrors);
-
-    if (newErrors.input || newErrors.select) {
-      return;
-    }
-
-    const newId = todos.reduce((max, todo) => Math.max(max, todo.id), 0) + 1;
     const searchedUser = usersFromServer.find(
       user => user.id === +selectedUser,
     );
@@ -82,17 +43,37 @@ export const App = () => {
       user: searchedUser,
     };
 
-    setTodos(prevTodo => [...prevTodo, newTodo]);
+    setVisibleTodos(prevTodo => [...prevTodo, newTodo]);
+  };
+
+  const validateForm = () => {
+    const newErrors = {
+      input: inputValue.trim() === '',
+      select: selectedUser === '0',
+    };
+
+    setError(newErrors);
+
+    if (newErrors.input || newErrors.select) {
+      return;
+    }
+  };
+
+  const handleFormSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    validateForm();
+    addTodo();
+
     setInputValue('');
     setSelectedUser('0');
   };
 
-  const handleInputValue = (event: ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     setInputValue(event.target.value);
     setError({ ...error, input: false });
   };
 
-  const handelSelectUser = (event: ChangeEvent<HTMLSelectElement>) => {
+  const handleSelectedUser = (event: ChangeEvent<HTMLSelectElement>) => {
     setSelectedUser(event.target.value);
     setError({ ...error, select: false });
   };
@@ -102,13 +83,13 @@ export const App = () => {
       <h1>Add todo form</h1>
 
       <form
-        onSubmit={event => handleSubmit(event)}
+        onSubmit={event => handleFormSubmit(event)}
         action="/api/todos"
         method="POST"
       >
         <div className="field">
           <input
-            onChange={event => handleInputValue(event)}
+            onChange={event => handleInputChange(event)}
             value={inputValue}
             type="text"
             data-cy="titleInput"
@@ -120,7 +101,7 @@ export const App = () => {
         <div className="field">
           <select
             value={selectedUser}
-            onChange={event => handelSelectUser(event)}
+            onChange={event => handleSelectedUser(event)}
             data-cy="userSelect"
           >
             <option value="0" disabled>
@@ -139,7 +120,7 @@ export const App = () => {
           Add
         </button>
       </form>
-      <TodoList todos={todos} />
+      <TodoList todos={visibleTodos} />
     </div>
   );
 };
